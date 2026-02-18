@@ -16,6 +16,7 @@ from src.fields.field_manager import FieldManager
 from src.fields.field_tracker import FieldTracker
 from src.ocr.ocr_engine import OCREngine
 from src.output.csv_writer import CSVWriter
+from src.gui.interactive_video import InteractiveVideoLabel
 
 class SmartOCRApp(QMainWindow):
     """Main application window"""
@@ -51,10 +52,11 @@ class SmartOCRApp(QMainWindow):
         video_group = QGroupBox("Video")
         video_layout = QVBoxLayout(video_group)
         
-        self.video_label = QLabel("Load a video to begin")
+        self.video_label = InteractiveVideoLabel()
         self.video_label.setAlignment(Qt.AlignCenter)
         self.video_label.setMinimumSize(960, 540)
         self.video_label.setStyleSheet("background-color: #1a1a1a; color: white;")
+        self.video_label.field_moved.connect(self.on_field_moved)
         video_layout.addWidget(self.video_label)
         
         # Video controls
@@ -236,18 +238,13 @@ class SmartOCRApp(QMainWindow):
                 
                 # Update field
                 field.update_value(text, confidence)
-            
-            # Draw box on frame
-            color = (0, 255, 0) if field.is_visible else (0, 0, 255)
-            cv2.rectangle(frame, (x, y), (x+w, y+h), color, 2)
-            
-            # Draw value
-            display_text = field.get_output_value() or "..."
-            cv2.putText(frame, f"{field.display_name}: {display_text}",
-                       (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
         
         # Update fields list
         self.update_fields_list()
+        
+        # Update interactive video widget
+        self.video_label.set_scale(frame.shape[1], frame.shape[0])
+        self.video_label.set_fields(self.field_manager.get_all_fields())
         
         # Write to CSV if recording
         if self.is_recording:
@@ -267,15 +264,12 @@ class SmartOCRApp(QMainWindow):
         bytes_per_line = ch * w
         qt_image = QImage(rgb_frame.data, w, h, bytes_per_line, QImage.Format_RGB888)
         
-        # Scale to fit label while maintaining aspect ratio
+        # Create pixmap and set it
         pixmap = QPixmap.fromImage(qt_image)
-        scaled_pixmap = pixmap.scaled(
-            self.video_label.size(), 
-            Qt.KeepAspectRatio, 
-            Qt.SmoothTransformation
-        )
+        self.video_label.setPixmap(pixmap)
         
-        self.video_label.setPixmap(scaled_pixmap)
+        # Trigger repaint to draw fields on top
+        self.video_label.update()
     
     def update_fields_list(self):
         """Update fields list widget"""
@@ -311,6 +305,19 @@ class SmartOCRApp(QMainWindow):
         self.field_manager.fields.clear()
         self.field_manager.field_order.clear()
         self.update_fields_list()
+    
+    def on_field_moved(self, field_name, new_bbox):
+        """Handle field being moved by user"""
+        self.field_manager.update_field_position(field_name, new_bbox)
+        # Update template for tracker
+        field = self.field_manager.get_field(field_name)
+        if field and self.current_frame is not None:
+            x, y, w, h = new_bbox
+            frame_h, frame_w = self.current_frame.shape[:2]
+            x = max(0, min(x, frame_w - w))
+            y = max(0, min(y, frame_h - h))
+            template = self.current_frame[y:y+h, x:x+w].copy()
+            field.set_template(template)
     
     def closeEvent(self, event):
         """Clean up on close"""
