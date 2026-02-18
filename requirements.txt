@@ -1,0 +1,19 @@
+# SmartOCR - Real-time Scoreboard OCR
+# Requirements for Windows
+
+# Core GUI
+PySide6>=6.4.0
+
+# Video Processing  
+opencv-python>=4.8.0
+numpy>=1.24.0
+
+# OCR Engine
+pytesseract>=0.3.10
+Pillow>=10.0.0
+
+# Data Output
+pandas>=2.0.0
+
+# Utilities
+python-dateutil>=2.8.0
