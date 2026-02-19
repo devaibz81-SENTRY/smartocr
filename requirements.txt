@@ -20,6 +20,12 @@ torch>=2.0.0
 flask>=2.0.0
 flask-cors>=4.0.0
 
+# NDI Support (optional)
+cyndilib>=0.1.0
+
+# Stream Support (SRT, RTSP, RTMP)
+# Note: OpenCV supports these natively with proper ffmpeg build
+
 # Data Output
 pandas>=2.0.0
 
