@@ -46,11 +46,9 @@ class NDICapture(QThread):
         if not NDI_AVAILABLE:
             return []
         
-        # Give it a bit more time than the default 1.0s if needed
-        if NDICapture.finder.wait_for_sources(1.0):
-            return NDICapture.finder.get_source_names()
-        
-        return []
+        # Wait briefly for new sources, but always return whatever we have found
+        NDICapture.finder.wait_for_sources(1000)
+        return NDICapture.finder.get_source_names()
     
     def __init__(self, source_name: str = None, ip_address: str = None):
         super().__init__()

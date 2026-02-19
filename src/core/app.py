@@ -119,10 +119,22 @@ class SmartOCRApp(QMainWindow):
         
         self.setup_ui()
         self.start_http_server()
-        self.refresh_ndi_sources()
+        
+        # Proactive NDI Discovery
+        self.ndi_discovery_count = 0
+        self.ndi_timer = QTimer(self)
+        self.ndi_timer.timeout.connect(self.auto_refresh_ndi)
+        self.ndi_timer.start(2000) # Refresh every 2 seconds initially
         
         # Load YOLO on startup so it's ready for first frame
-        QTimer.singleShot(1000, self.auto_detect_fields)
+        QTimer.singleShot(1500, self.auto_detect_fields)
+    
+    def auto_refresh_ndi(self):
+        """Periodically refresh NDI list during startup window"""
+        self.refresh_ndi_sources()
+        self.ndi_discovery_count += 1
+        if self.ndi_discovery_count > 15: # Stop after 30 seconds
+            self.ndi_timer.stop()
     
     def setup_ui(self):
         """Setup comprehensive UI"""
