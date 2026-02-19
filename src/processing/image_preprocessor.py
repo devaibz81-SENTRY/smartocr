@@ -68,12 +68,13 @@ class ImagePreprocessor:
         """
         Adaptive Gaussian thresholding
         Best for uneven lighting (stadium scoreboards)
+        Based on ScoreSight implementation
         """
-        # Calculate block size based on image size
         h, w = gray.shape
-        block_size = max(int((h * w) * 0.001), 11)
-        if block_size % 2 == 0:
-            block_size += 1
+        
+        # Calculate block size based on image area (ScoreSight method)
+        block_size = max(int((h * w) * 0.01), 3)
+        block_size = block_size | 1  # Make it odd
         
         binary = cv2.adaptiveThreshold(
             gray, 255,
@@ -111,7 +112,7 @@ class ImagePreprocessor:
         )
         return binary
     
-    def _cleanup_noise(self, binary: np.ndarray) -> np.ndarray:
+    def _cleanup_noise(self, binary: np.ndarray, cleanup_thresh: float = 0.0001) -> np.ndarray:
         """
         Remove small artifacts that might confuse OCR
         Based on ScoreSight contour filtering
@@ -119,16 +120,13 @@ class ImagePreprocessor:
         # Find contours
         contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         
-        # Calculate area threshold
-        h, w = binary.shape
-        img_area = h * w
-        min_area = img_area * 0.0001  # 0.01% of image area
-        max_area = img_area * 0.5     # 50% of image area
+        # Calculate area threshold (ScoreSight method)
+        img_area_thresh = binary.shape[0] * binary.shape[1] * cleanup_thresh
         
-        # Filter contours
+        # Remove small artifacts
         for contour in contours:
-            area = cv2.contourArea(contour)
-            if area < min_area or area > max_area:
+            if cv2.contourArea(contour) < img_area_thresh:
+                # Paint noise black
                 cv2.drawContours(binary, [contour], 0, 0, -1)
         
         return binary
