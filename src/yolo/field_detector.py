@@ -25,13 +25,17 @@ class YOLOFieldDetector:
     Falls back to manual detection if model not available
     """
     
-    # Scoreboard field classes
+    # Scoreboard field classes (from your trained model)
     FIELD_CLASSES = {
-        0: ('home_score', 'Home Score', 'number'),
-        1: ('away_score', 'Away Score', 'number'),
-        2: ('game_clock', 'Game Clock', 'time'),
-        3: ('shot_clock', 'Shot Clock', 'number'),
-        4: ('period', 'Period', 'text'),
+        0: ('away_fouls', 'Away Fouls', 'number'),
+        1: ('away_team_name', 'Away Team Name', 'text'),
+        2: ('away_score', 'Away Score', 'number'),
+        3: ('game_clock', 'Game Clock', 'time'),
+        4: ('home_fouls', 'Home Fouls', 'number'),
+        5: ('home_team_name', 'Home Team Name', 'text'),
+        6: ('home_score', 'Home Score', 'number'),
+        7: ('period', 'Period', 'text'),
+        8: ('shot_clock', 'Shot Clock', 'number'),
     }
     
     def __init__(self, model_path: str = None):
@@ -44,22 +48,27 @@ class YOLOFieldDetector:
         
         # Try to load model
         try:
-            # Look for YOLO model in the folder
-            yolo_dir = Path(model_path)
+            # Look for trained scoreboard model first
+            trained_model = Path(r"C:\Users\suppo\Documents\YOLO BUILD\YOLOv8-Object-Detection-on-Video-with-OpenCV-main\scoreboard_yolov5.pt")
             
-            # Check for trained model first
-            model_files = list(yolo_dir.glob("*.pt")) + list(yolo_dir.glob("*.yaml"))
-            
-            if model_files:
-                # Use first found model
-                model_file = model_files[0]
-                print(f"Loading YOLO model: {model_file}")
-                self.model = YOLO(str(model_file))
+            if trained_model.exists():
+                print(f"Loading trained scoreboard model: {trained_model}")
+                self.model = YOLO(str(trained_model))
+            elif model_path:
+                # Try provided path
+                yolo_dir = Path(model_path)
+                model_files = list(yolo_dir.glob("*.pt"))
+                
+                if model_files:
+                    model_file = model_files[0]
+                    print(f"Loading YOLO model: {model_file}")
+                    self.model = YOLO(str(model_file))
+                else:
+                    print("No custom model found. Using default YOLOv8n.")
+                    self.model = YOLO('yolov8n.pt')
             else:
-                # Use default COCO model as fallback
-                print("No custom model found. Using default YOLOv8n.")
-                print("Note: You'll need to manually place fields or train a custom model.")
-                self.model = YOLO('yolov8n.pt')
+                print("No trained model found. Please train first or use manual fields.")
+                self.model = None
                 
         except Exception as e:
             print(f"Error loading YOLO model: {e}")
