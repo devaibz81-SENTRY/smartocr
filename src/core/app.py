@@ -714,9 +714,9 @@ class SmartOCRApp(QMainWindow):
         """Auto-detect with YOLO"""
         if not self.yolo_detector:
             try:
-                self.yolo_detector = YOLOFieldDetector(
-                    r"C:\Users\suppo\Documents\YOLO BUILD\YOLOv8-Object-Detection-on-Video-with-OpenCV-main"
-                )
+                # Use the trained model path
+                model_path = r"C:\Users\suppo\Documents\YOLO BUILD\yolov5\runs\train\scoreboard_detection\weights\best.pt"
+                self.yolo_detector = YOLOFieldDetector(model_path)
                 self.yolo_status.setText("YOLO: Loaded")
             except Exception as e:
                 self.yolo_status.setText(f"YOLO Error: {e}")
