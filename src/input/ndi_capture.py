@@ -89,76 +89,53 @@ class NDICapture(QThread):
             self.error_signal.emit(f"NDI init error: {e}")
 
     def run(self):
-        """Main capture loop using ScoreSight's read/drain logic"""
+        """Main capture loop - Simplified to fix 'video decoder not found'"""
         if not NDI_AVAILABLE or self.receiver is None:
             return
         
         self.is_running = True
         
         while self.is_running:
-            if self.receiver is not None and self.receiver.is_connected():
-                # ScoreSight pattern: Try to "drain" or find the latest frame within 30ms window
-                video_grab_start_time = time.time()
-                frame_found = False
+            try:
+                # Check connection
+                if self.receiver is None or not self.receiver.is_connected():
+                    if self.receiver:
+                        self.receiver.reconnect()
+                    time.sleep(1)
+                    continue
                 
-                while (
-                    self.is_running
-                    and self.receiver is not None
-                    and self.receiver.is_connected()
-                    and time.time() - video_grab_start_time < 0.03
-                ):
-                    try:
-                        ret = self.receiver.receive(ReceiveFrameType.recv_all, 1000)
-                    except Exception as e:
-                        print(f"Error receiving NDI frame: {e}")
-                        time.sleep(1)
-                        if self.receiver: self.receiver.reconnect()
-                        break
-                    
-                    if ret == ReceiveFrameType.recv_video:
-                        if min(self.video_frame.xres, self.video_frame.yres) != 0:
-                            # Allocate buffer
-                            frame = np.empty(
-                                self.video_frame.get_buffer_size(), dtype=np.uint8
-                            )
-                            # Copy from NDI to numpy
-                            self.video_frame.fill_p_data(frame)
-                            # Reshape to 4-channel image
-                            frame = frame.reshape(
-                                self.video_frame.yres, self.video_frame.xres, 4
-                            )
-                            
-                            # EXACT Scoresight conversion: 
-                            # ScoreSight uses cvtColor(frame, cv2.COLOR_RGBA2RGB) 
-                            # on a BGRX_BGRA input, effectively swapping R and B.
-                            # We'll use the same to be consistent with their "correct" behavior.
-                            frame = cv2.cvtColor(frame, cv2.COLOR_RGBA2RGB)
-                            
-                            self.frame_ready.emit(frame)
-                            frame_found = True
-                            # We found a frame, but ScoreSight loop continues for 30ms 
-                            # to get the absolute newest one.
-                            
-                        else:
-                            print("NDI Capture video frame is empty")
-                    
-                    elif ret == ReceiveFrameType.recv_metadata:
-                        continue
-                    elif ret == ReceiveFrameType.recv_error:
-                        if self.receiver: self.receiver.reconnect()
-                        break
-                    else:
-                        # Nothing or status change
-                        pass
+                # Receive frame (standard single receive)
+                # This is more compatible with NDI|HX streams that might fail 
+                # under rapid-fire 'drain' loops.
+                ret = self.receiver.receive(ReceiveFrameType.recv_all, 1000)
                 
-                if not frame_found:
-                    # Small sleep if no frame found in the 30ms window 
-                    # to prevent CPU pinning
-                    time.sleep(0.001)
-            else:
-                # Not connected
-                if self.receiver:
+                if ret == ReceiveFrameType.recv_video:
+                    if min(self.video_frame.xres, self.video_frame.yres) != 0:
+                        # Allocate and fill buffer
+                        frame = np.empty(
+                            self.video_frame.get_buffer_size(), dtype=np.uint8
+                        )
+                        self.video_frame.fill_p_data(frame)
+                        
+                        # Reshape to 4-channel BGRX
+                        frame = frame.reshape(
+                            self.video_frame.yres, self.video_frame.xres, 4
+                        )
+                        
+                        # Standard conversion for OpenCV (BGRX to BGR)
+                        frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
+                        
+                        self.frame_ready.emit(frame)
+                
+                elif ret == ReceiveFrameType.recv_error:
                     self.receiver.reconnect()
+                    time.sleep(0.5)
+                
+                # Small yield to keep UI responsive
+                time.sleep(0.001)
+                
+            except Exception as e:
+                print(f"NDI Runner Error: {e}")
                 time.sleep(1)
 
     def stop(self):

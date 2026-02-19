@@ -65,7 +65,14 @@ class YOLOFieldDetector:
             print(f"Loading YOLOv5 model: {model_file}")
             
             # Select device - Prioritize GPU '0'
-            self.device = select_device('0' if torch.cuda.is_available() else 'cpu')
+            import os
+            old_cwd = os.getcwd()
+            try:
+                os.chdir(YOLOV5_PATH)
+                # Force select_device to use CUDA if available, but avoid unquoted path issues
+                self.device = select_device('0' if torch.cuda.is_available() else 'cpu')
+            finally:
+                os.chdir(old_cwd)
             
             # Load model
             self.model = DetectMultiBackend(str(model_file), device=self.device)
