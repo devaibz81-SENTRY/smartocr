@@ -111,6 +111,9 @@ class SmartOCRApp(QMainWindow):
         self.setup_ui()
         self.start_http_server()
         self.refresh_ndi_sources()
+        
+        # Load YOLO on startup so it's ready for first frame
+        QTimer.singleShot(1000, self.auto_detect_fields)
     
     def setup_ui(self):
         """Setup comprehensive UI"""
@@ -131,28 +134,28 @@ class SmartOCRApp(QMainWindow):
         # Source Selection Tabs (ScoreSight style)
         source_tabs = QTabWidget()
         source_tabs.setStyleSheet("""
-            QTabWidget::pane { border: 1px solid #444; background: #2b2b2b; }
-            QTabBar::tab { padding: 10px 20px; font-size: 12px; background: #333; color: #ccc; border: 1px solid #444; }
-            QTabBar::tab:selected { background: #444; color: white; border-bottom: 2px solid #4CAF50; }
+            QTabWidget::pane { border: 1px solid #444; background: #1e1e1e; }
+            QTabBar::tab { padding: 10px 20px; font-size: 12px; background: #2d2d2d; color: #aaa; border: 1px solid #444; }
+            QTabBar::tab:selected { background: #3d3d3d; color: white; border-bottom: 2px solid #4CAF50; }
             QComboBox { 
-                background-color: #3d3d3d; 
-                color: white; 
+                background-color: #2b2b2b; 
+                color: #ffffff; 
                 border: 1px solid #555; 
                 padding: 5px; 
                 border-radius: 3px;
-                selection-background-color: #4CAF50;
             }
+            QComboBox::drop-down { border: none; }
             QComboBox QAbstractItemView {
                 background-color: #2b2b2b;
-                color: white;
+                color: #ffffff;
                 selection-background-color: #4CAF50;
-                outline: none;
+                selection-color: white;
                 border: 1px solid #444;
             }
-            QLineEdit { background-color: #3d3d3d; color: white; border: 1px solid #555; padding: 5px; }
-            QPushButton { background-color: #444; color: white; border: 1px solid #555; padding: 8px; }
-            QPushButton:hover { background-color: #555; }
-            QLabel { color: #ddd; }
+            QLineEdit { background-color: #2b2b2b; color: white; border: 1px solid #555; padding: 5px; }
+            QPushButton { background-color: #3d3d3d; color: white; border: 1px solid #555; padding: 8px; border-radius: 4px; }
+            QPushButton:hover { background-color: #4d4d4d; border-color: #4CAF50; }
+            QLabel { color: #eeeeee; }
         """)
         
         # Tab 1: File
@@ -648,10 +651,10 @@ class SmartOCRApp(QMainWindow):
             self.video_height, self.video_width = frame.shape[:2]
             self.video_label.set_scale(self.video_width, self.video_height)
             
-            # Auto-create fields if none exist
+            # Auto-detect fields only if it's the first time we see this source
             if not self.field_manager.fields:
-                self.field_manager.create_default_fields(self.video_width, self.video_height)
-                self.update_fields_list()
+                print("First frame received, triggering YOLO auto-detect...")
+                QTimer.singleShot(500, self.auto_detect_fields)
 
         # Update preview in real-time for live sources
         # We only display here if this is a live source (Low latency preview)
