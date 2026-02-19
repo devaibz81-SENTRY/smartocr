@@ -267,19 +267,60 @@ class InteractiveVideoLabel(QLabel):
             painter.setPen(QPen(color, 1))
             painter.drawText(x, y - 5, label)
         
-        # Draw Live AI Detections (translucent)
+        # Draw Live AI Detections (Elegant Overlay)
         if hasattr(self, 'detections') and self.detections:
-            for det in self.detections:
+            for i, det in enumerate(self.detections):
                 x, y, w, h = self.video_to_display(*det['bbox'])
                 
-                # Use a specific style for AI detections
-                ai_color = QColor(0, 255, 255, 120)  # Cyan with transparency
-                painter.setPen(QPen(ai_color, 1, Qt.DashLine))
+                # Dynamic color palette for different classes
+                colors = [
+                    QColor(0, 255, 255),   # Cyan
+                    QColor(255, 255, 0),   # Yellow
+                    QColor(255, 0, 255),   # Magenta
+                    QColor(0, 255, 0),     # Lime
+                    QColor(255, 128, 0),   # Orange
+                ]
+                base_color = colors[i % len(colors)]
+                
+                # 1. Draw Bounding Box (Solid with semi-transparent fill)
+                box_pen = QPen(base_color, 2)
+                painter.setPen(box_pen)
+                painter.setBrush(QColor(base_color.red(), base_color.green(), base_color.blue(), 30))
                 painter.drawRect(x, y, w, h)
                 
-                # Draw small AI label
-                painter.setPen(QPen(QColor(0, 255, 255), 1))
-                ai_label = f"{det['display_name']} ({int(det['confidence']*100)}%)"
-                painter.drawText(x, y + h + 12, ai_label)
+                # 2. Draw Label with Background (Post-processing style)
+                label_text = f"{det['display_name']} {int(det['confidence']*100)}%"
+                font = QFont("Outfit", 9, QFont.Bold)
+                painter.setFont(font)
+                
+                # Calculate text size for background box
+                metrics = painter.fontMetrics()
+                text_rect = metrics.boundingRect(label_text)
+                bg_rect = QRect(x, y - text_rect.height() - 4, text_rect.width() + 10, text_rect.height() + 4)
+                
+                # Draw label background
+                painter.setPen(Qt.NoPen)
+                painter.setBrush(base_color)
+                painter.drawRect(bg_rect)
+                
+                # Draw label text (Black/White depending on contrast)
+                painter.setPen(QColor(0, 0, 0)) # Clean black text
+                painter.drawText(x + 5, y - 5, label_text)
+                
+                # 3. Draw Corner Accents (Elegant touch)
+                line_len = min(w, h, 20) // 2
+                painter.setPen(QPen(base_color, 4))
+                # TL
+                painter.drawLine(x, y, x + line_len, y)
+                painter.drawLine(x, y, x, y + line_len)
+                # TR
+                painter.drawLine(x + w, y, x + w - line_len, y)
+                painter.drawLine(x + w, y, x + w, y + line_len)
+                # BL
+                painter.drawLine(x, y + h, x + line_len, y + h)
+                painter.drawLine(x, y + h, x, y + h - line_len)
+                # BR
+                painter.drawLine(x + w, y + h, x + w - line_len, y + h)
+                painter.drawLine(x + w, y + h, x + w, y + h - line_len)
         
         painter.end()
