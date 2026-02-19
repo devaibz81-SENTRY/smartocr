@@ -205,9 +205,17 @@ class SmartOCRApp(QMainWindow):
         ndi_layout.addWidget(ip_help)
         
         self.ndi_connect_btn = QPushButton("🔗 Connect NDI")
-        self.ndi_connect_btn.setStyleSheet("font-size: 14px; padding: 10px; background-color: #4CAF50;")
+        self.ndi_connect_btn.setStyleSheet("font-size: 14px; padding: 10px; background-color: #2b2b2b; color: white;")
         self.ndi_connect_btn.clicked.connect(self.connect_ndi)
         ndi_layout.addWidget(self.ndi_connect_btn)
+
+        # NEW: Dedicated Scan Button for NDI
+        self.ndi_scan_btn = QPushButton("🚀 START LIVE AI SCAN")
+        self.ndi_scan_btn.setStyleSheet("font-size: 15px; padding: 12px; background-color: #4CAF50; color: white; font-weight: bold; border-radius: 5px;")
+        self.ndi_scan_btn.clicked.connect(self.start_live_ai_scan)
+        self.ndi_scan_btn.setEnabled(False)
+        ndi_layout.addWidget(self.ndi_scan_btn)
+        
         ndi_layout.addStretch()
         source_tabs.addTab(ndi_tab, "📡 NDI")
         
@@ -527,6 +535,7 @@ class SmartOCRApp(QMainWindow):
             # We don't have resolution yet, so we'll wait for first frame
             self.video_label.setText("Waiting for NDI video...")
             self.enable_playback_controls()
+            self.ndi_scan_btn.setEnabled(True)
             
         except Exception as e:
             QMessageBox.critical(self, "NDI Error", f"Failed to connect: {str(e)}")
@@ -649,6 +658,34 @@ class SmartOCRApp(QMainWindow):
         
         self.is_processing = False
     
+    def start_live_ai_scan(self):
+        """Kickstart the YOLO processing thread for live inputs"""
+        if self.current_frame is None:
+            QMessageBox.warning(self, "No Video", "Please connect a source and wait for video before scanning.")
+            return
+
+        if not self.yolo_detector:
+            self.auto_detect_fields()
+
+        if self.processing_thread and self.processing_thread.isRunning():
+            self.processing_thread.stop()
+
+        self.processing_thread = ProcessingThread(
+            self.field_manager, 
+            self.field_tracker, 
+            self.ocr_engine,
+            self.yolo_detector
+        )
+        self.processing_thread.frame_processed.connect(self.on_frame_processed)
+        self.processing_thread.detections_ready.connect(self.video_label.set_detections)
+        self.processing_thread.start()
+        
+        self.is_processing = True
+        self.ndi_scan_btn.setText("🛡️ SCANNING LIVE...")
+        self.ndi_scan_btn.setStyleSheet("background-color: #ff9800; color: white; font-weight: bold;")
+        self.source_status.setText("Source: LIVE AI SCAN ACTIVE")
+        self.source_status.setStyleSheet("color: #4CAF50; font-weight: bold;")
+
     def toggle_live_ai(self, state):
         """Toggle live AI detection in processing thread"""
         if self.processing_thread:
