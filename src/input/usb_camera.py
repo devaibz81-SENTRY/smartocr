@@ -62,12 +62,32 @@ class USBCameraCapture(QThread):
                     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
                     fps = cap.get(cv2.CAP_PROP_FPS)
                     
-                    # Get better name
-                    name = get_camera_name(i)
+                    # Skip invalid cameras (0x0 resolution)
+                    if width == 0 or height == 0:
+                        cap.release()
+                        continue
+                    
+                    # Create quality label
+                    if width >= 1920 and height >= 1080:
+                        quality = "1080p HD"
+                    elif width >= 1280 and height >= 720:
+                        quality = "720p"
+                    elif width >= 640 and height >= 480:
+                        quality = "SD"
+                    else:
+                        quality = f"{width}x{height}"
+                    
+                    # Better naming
+                    if i == 0:
+                        cam_type = "Primary"
+                    elif i == 1:
+                        cam_type = "Secondary"
+                    else:
+                        cam_type = f"Camera {i}"
                     
                     available_cameras.append({
                         'index': i,
-                        'name': f'{name} ({width}x{height} @ {int(fps)}fps)'
+                        'name': f'{cam_type} - {quality} ({width}x{height})'
                     })
                 cap.release()
         return available_cameras
