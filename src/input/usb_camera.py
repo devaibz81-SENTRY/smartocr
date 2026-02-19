@@ -4,6 +4,43 @@ USB Camera Capture - Webcam input support
 import cv2
 import numpy as np
 from PySide6.QtCore import QThread, Signal
+import platform
+
+def get_camera_name(index):
+    """Get camera friendly name on Windows"""
+    if platform.system() != 'Windows':
+        return f"Camera {index}"
+    
+    try:
+        # Try to get camera name using DirectShow properties
+        cap = cv2.VideoCapture(index, cv2.CAP_DSHOW)
+        if cap.isOpened():
+            # Get device name from DirectShow
+            # This is a workaround - OpenCV doesn't expose friendly names easily
+            # We'll use the device path to identify cameras
+            
+            # Test read to ensure camera works
+            ret, frame = cap.read()
+            if ret:
+                # Get some properties to help identify
+                width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                
+                # Try to identify common cameras by resolution
+                if width >= 1920 and height >= 1080:
+                    res_label = "HD/4K"
+                elif width >= 1280 and height >= 720:
+                    res_label = "720p"
+                else:
+                    res_label = f"{width}x{height}"
+                
+                cap.release()
+                return f"Camera {index} - {res_label}"
+            cap.release()
+    except:
+        pass
+    
+    return f"Camera {index}"
 
 class USBCameraCapture(QThread):
     """
@@ -14,7 +51,7 @@ class USBCameraCapture(QThread):
     
     @staticmethod
     def list_cameras(max_cameras=10):
-        """List available USB cameras"""
+        """List available USB cameras with better names"""
         available_cameras = []
         for i in range(max_cameras):
             cap = cv2.VideoCapture(i, cv2.CAP_DSHOW)  # Use DirectShow on Windows
@@ -24,9 +61,13 @@ class USBCameraCapture(QThread):
                     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
                     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
                     fps = cap.get(cv2.CAP_PROP_FPS)
+                    
+                    # Get better name
+                    name = get_camera_name(i)
+                    
                     available_cameras.append({
                         'index': i,
-                        'name': f'Camera {i} ({width}x{height} @ {fps}fps)'
+                        'name': f'{name} ({width}x{height} @ {int(fps)}fps)'
                     })
                 cap.release()
         return available_cameras
