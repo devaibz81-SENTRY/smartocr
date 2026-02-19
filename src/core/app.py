@@ -20,6 +20,7 @@ from src.fields.field_tracker import FieldTracker
 from src.ocr.ocr_engine import OCREngine
 from src.output.csv_writer import CSVWriter
 from src.output.ndi_output import NDIOutput
+from src.output.xml_output import XMLOutput
 from src.gui.interactive_video import InteractiveVideoLabel
 from src.yolo.field_detector import YOLOFieldDetector
 from src.http.server import HTTPServerThread
@@ -92,6 +93,7 @@ class SmartOCRApp(QMainWindow):
         self.field_tracker = FieldTracker()
         self.ocr_engine = OCREngine()
         self.csv_writer = CSVWriter()
+        self.xml_output = XMLOutput()
         self.ndi_output = None
         self.yolo_detector = None
         self.http_server = None
@@ -329,7 +331,7 @@ class SmartOCRApp(QMainWindow):
         output_group = QGroupBox("📤 Output")
         output_layout = QVBoxLayout(output_group)
         
-        self.output_label = QLabel("CSV: Not recording")
+        self.output_label = QLabel("Output: Not recording")
         self.output_label.setStyleSheet("font-size: 12px;")
         output_layout.addWidget(self.output_label)
         
@@ -337,6 +339,11 @@ class SmartOCRApp(QMainWindow):
         self.csv_path_label.setWordWrap(True)
         self.csv_path_label.setStyleSheet("font-size: 10px; color: #666;")
         output_layout.addWidget(self.csv_path_label)
+        
+        self.xml_path_label = QLabel("")
+        self.xml_path_label.setWordWrap(True)
+        self.xml_path_label.setStyleSheet("font-size: 10px; color: #666;")
+        output_layout.addWidget(self.xml_path_label)
         
         # HTTP Server info
         http_frame = QFrame()
@@ -524,6 +531,7 @@ class SmartOCRApp(QMainWindow):
         
         if self.is_recording:
             self.csv_writer.write(values)
+            self.xml_output.write(values)
     
     def display_frame(self, frame):
         """Display frame"""
@@ -629,20 +637,23 @@ class SmartOCRApp(QMainWindow):
                 self.yolo_status.setText("No fields detected")
     
     def toggle_recording(self):
-        """Toggle CSV recording"""
+        """Toggle CSV/XML recording"""
         if not self.is_recording:
             fieldnames = [f.name for f in self.field_manager.get_all_fields()]
             self.csv_writer.open(fieldnames)
+            self.xml_output = XMLOutput()  # Create new XML file
             self.is_recording = True
             self.record_btn.setText("⏹️ Stop")
             self.record_btn.setStyleSheet("background-color: #f44336; color: white;")
-            self.output_label.setText("CSV: Recording...")
+            self.output_label.setText("Recording...")
+            self.csv_path_label.setText(f"CSV: {self.csv_writer.get_path()}")
+            self.xml_path_label.setText(f"XML: {self.xml_output.get_path()}")
         else:
             self.csv_writer.close()
             self.is_recording = False
             self.record_btn.setText("🔴 Record")
             self.record_btn.setStyleSheet("")
-            self.output_label.setText("CSV: Saved ✓")
+            self.output_label.setText("Saved ✓")
     
     def update_fields_list(self):
         """Update fields list"""
