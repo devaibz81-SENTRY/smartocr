@@ -44,7 +44,15 @@ class InteractiveVideoLabel(QLabel):
         self.scale_y = 1.0
         self.offset_x = 0
         self.offset_y = 0
+        
+        # Live AI detections
+        self.detections = []
     
+    def set_detections(self, detections):
+        """Update live AI detections from YOLO"""
+        self.detections = detections
+        self.update()
+
     def set_fields(self, fields):
         """Update field list"""
         self.fields = fields
@@ -258,5 +266,20 @@ class InteractiveVideoLabel(QLabel):
             label = f"{field.display_name}: {field.get_output_value() or '...'}"
             painter.setPen(QPen(color, 1))
             painter.drawText(x, y - 5, label)
+        
+        # Draw Live AI Detections (translucent)
+        if hasattr(self, 'detections') and self.detections:
+            for det in self.detections:
+                x, y, w, h = self.video_to_display(*det['bbox'])
+                
+                # Use a specific style for AI detections
+                ai_color = QColor(0, 255, 255, 120)  # Cyan with transparency
+                painter.setPen(QPen(ai_color, 1, Qt.DashLine))
+                painter.drawRect(x, y, w, h)
+                
+                # Draw small AI label
+                painter.setPen(QPen(QColor(0, 255, 255), 1))
+                ai_label = f"{det['display_name']} ({int(det['confidence']*100)}%)"
+                painter.drawText(x, y + h + 12, ai_label)
         
         painter.end()

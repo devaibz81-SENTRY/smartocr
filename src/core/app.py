@@ -31,16 +31,20 @@ from src.input.usb_camera import USBCameraCapture
 class ProcessingThread(QThread):
     """Separate thread for video processing"""
     frame_processed = Signal(np.ndarray, dict)
+    detections_ready = Signal(list)
     
-    def __init__(self, field_manager, field_tracker, ocr_engine):
+    def __init__(self, field_manager, field_tracker, ocr_engine, yolo_detector=None):
         super().__init__()
         self.field_manager = field_manager
         self.field_tracker = field_tracker
         self.ocr_engine = ocr_engine
+        self.yolo_detector = yolo_detector
         self.current_frame = None
         self.is_running = False
         self.frame_count = 0
         self.process_every_n_frames = 2
+        self.yolo_every_n_frames = 5
+        self.live_yolo_enabled = True
     
     def set_frame(self, frame):
         self.current_frame = frame
@@ -67,6 +71,11 @@ class ProcessingThread(QThread):
                                 roi, field.field_type.value
                             )
                             field.update_value(text, confidence)
+                
+                # Live YOLO Detection
+                if self.live_yolo_enabled and self.yolo_detector and self.frame_count % self.yolo_every_n_frames == 0:
+                    detections = self.yolo_detector.detect(frame)
+                    self.detections_ready.emit(detections)
                 
                 values = self.field_manager.get_field_values()
                 self.frame_processed.emit(frame, values)
@@ -391,6 +400,13 @@ class SmartOCRApp(QMainWindow):
         self.auto_track_checkbox.setStyleSheet("font-size: 11px;")
         fields_layout.addWidget(self.auto_track_checkbox)
         
+        # Live AI Overlay toggle
+        self.live_ai_checkbox = QCheckBox("Live AI Detection Overlay")
+        self.live_ai_checkbox.setChecked(True)
+        self.live_ai_checkbox.setStyleSheet("font-size: 11px; color: #4CAF50; font-weight: bold;")
+        self.live_ai_checkbox.stateChanged.connect(self.toggle_live_ai)
+        fields_layout.addWidget(self.live_ai_checkbox)
+        
         right_layout.addWidget(fields_group)
         
         # Output section
@@ -633,6 +649,13 @@ class SmartOCRApp(QMainWindow):
         
         self.is_processing = False
     
+    def toggle_live_ai(self, state):
+        """Toggle live AI detection in processing thread"""
+        if self.processing_thread:
+            self.processing_thread.live_yolo_enabled = (state == Qt.Checked)
+        if not (state == Qt.Checked):
+            self.video_label.set_detections([])
+
     def enable_playback_controls(self):
         """Enable playback controls"""
         self.play_btn.setEnabled(True)
@@ -707,15 +730,24 @@ class SmartOCRApp(QMainWindow):
             if self.video_reader:
                 self.video_reader.start()
             
+            # Start model if available
+            if not self.yolo_detector:
+                self.auto_detect_fields()
+
             self.processing_thread = ProcessingThread(
-                self.field_manager, self.field_tracker, self.ocr_engine
+                self.field_manager, 
+                self.field_tracker, 
+                self.ocr_engine,
+                self.yolo_detector
             )
             self.processing_thread.frame_processed.connect(self.on_frame_processed)
+            self.processing_thread.detections_ready.connect(self.video_label.set_detections)
             self.processing_thread.start()
             
             self.is_processing = True
             self.play_btn.setEnabled(False)
             self.pause_btn.setEnabled(True)
+            self.play_btn.setText("⏹️ Stop")
     
     def pause_video(self):
         """Pause playback"""
@@ -743,7 +775,8 @@ class SmartOCRApp(QMainWindow):
     def on_source_error(self, error_msg):
         """Handle source error"""
         print(f"Source error: {error_msg}")
-    
+        QMessageBox.warning(self, "Source Error", error_msg)
+
     def toggle_ndi_output(self):
         """Toggle NDI output"""
         if self.ndi_out_btn.isChecked():
