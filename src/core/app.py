@@ -158,8 +158,19 @@ class SmartOCRApp(QMainWindow):
         self.ndi_combo = QComboBox()
         self.ndi_combo.setStyleSheet("font-size: 12px; padding: 5px;")
         self.ndi_combo.addItem("Click Refresh to find NDI sources...")
-        ndi_layout.addWidget(QLabel("NDI Sources:"))
+        ndi_layout.addWidget(QLabel("NDI Sources (Auto-discover):"))
         ndi_layout.addWidget(self.ndi_combo)
+        
+        # IP Address input for manual connection
+        ndi_layout.addWidget(QLabel("OR Connect by IP:"))
+        self.ndi_ip_input = QLineEdit()
+        self.ndi_ip_input.setPlaceholderText("10.10.10.161 or 10.10.10.161:5960")
+        self.ndi_ip_input.setStyleSheet("font-size: 12px; padding: 5px;")
+        ndi_layout.addWidget(self.ndi_ip_input)
+        
+        ip_help = QLabel("Enter IP address of NDI device (e.g., 10.10.10.161)")
+        ip_help.setStyleSheet("font-size: 10px; color: #666;")
+        ndi_layout.addWidget(ip_help)
         
         self.ndi_connect_btn = QPushButton("🔗 Connect NDI")
         self.ndi_connect_btn.setStyleSheet("font-size: 14px; padding: 10px; background-color: #4CAF50;")
@@ -443,27 +454,40 @@ class SmartOCRApp(QMainWindow):
             self.setup_video_source(path)
     
     def connect_ndi(self):
-        """Connect to NDI source"""
+        """Connect to NDI source by name or IP"""
+        # Check if IP address is provided
+        ip_address = self.ndi_ip_input.text().strip()
         source_name = self.ndi_combo.currentText()
-        if source_name and source_name != "No NDI sources found":
-            self.current_source_type = "ndi"
+        
+        self.current_source_type = "ndi"
+        
+        # Stop existing
+        self.stop_current_source()
+        
+        # Start NDI capture
+        try:
+            if ip_address:
+                # Connect by IP
+                self.ndi_capture = NDICapture(ip_address=ip_address)
+                display_name = f"IP: {ip_address}"
+            elif source_name and source_name != "No NDI sources found" and source_name != "Click Refresh to find NDI sources...":
+                # Connect by discovered source name
+                self.ndi_capture = NDICapture(source_name=source_name)
+                display_name = source_name
+            else:
+                QMessageBox.warning(self, "No NDI Source", "Please select an NDI source from the dropdown or enter an IP address.")
+                return
             
-            # Stop existing
-            self.stop_current_source()
+            self.ndi_capture.frame_ready.connect(self.on_frame_ready)
+            self.ndi_capture.error_signal.connect(self.on_source_error)
+            self.ndi_capture.start()
             
-            # Start NDI capture
-            try:
-                self.ndi_capture = NDICapture(source_name)
-                self.ndi_capture.frame_ready.connect(self.on_frame_ready)
-                self.ndi_capture.error_signal.connect(self.on_source_error)
-                self.ndi_capture.start()
-                
-                self.source_status.setText(f"Source: NDI - {source_name}")
-                self.source_status.setStyleSheet("color: #4CAF50;")
-                self.enable_playback_controls()
-                
-            except Exception as e:
-                QMessageBox.critical(self, "NDI Error", str(e))
+            self.source_status.setText(f"Source: NDI - {display_name}")
+            self.source_status.setStyleSheet("color: #4CAF50;")
+            self.enable_playback_controls()
+            
+        except Exception as e:
+            QMessageBox.critical(self, "NDI Error", f"Failed to connect: {str(e)}\n\nMake sure cyndilib is installed:\npip install cyndilib")
     
     def connect_stream(self):
         """Connect to network stream"""

@@ -1,5 +1,5 @@
 """
-NDI Capture - Live NDI video input
+NDI Capture - Live NDI video input with IP support
 Based on ScoreSight implementation
 """
 import time
@@ -22,7 +22,7 @@ except ImportError:
 
 class NDICapture(QThread):
     """
-    NDI video capture thread
+    NDI video capture thread with IP support
     """
     frame_ready = Signal(np.ndarray)
     error_signal = Signal(str)
@@ -44,9 +44,10 @@ class NDICapture(QThread):
         
         return sources
     
-    def __init__(self, source_name: str):
+    def __init__(self, source_name: str = None, ip_address: str = None):
         super().__init__()
         self.source_name = source_name
+        self.ip_address = ip_address
         self.receiver = None
         self.is_running = False
         
@@ -63,17 +64,63 @@ class NDICapture(QThread):
             if NDICapture.finder is None:
                 NDICapture.finder = Finder()
             
-            self.source = NDICapture.finder.get_source(source_name)
-            self.receiver.set_source(self.source)
+            # Try to get source - either by name or create from IP
+            if source_name and source_name != "No NDI sources found":
+                self.source = NDICapture.finder.get_source(source_name)
+            elif ip_address:
+                # Create source from IP address
+                # Format: IP_ADDRESS (NDI_SOURCE_NAME)
+                # or just IP_ADDRESS
+                self.source = self._create_source_from_ip(ip_address)
+            else:
+                self.error_signal.emit("No NDI source or IP provided")
+                return
             
-            self.video_frame = VideoRecvFrame()
-            self.metadata_frame = MetadataRecvFrame()
-            self.receiver.set_video_frame(self.video_frame)
-            self.receiver.set_metadata_frame(self.metadata_frame)
-            self.receiver.set_source_tally_program(True)
-            
+            if self.source:
+                self.receiver.set_source(self.source)
+                
+                self.video_frame = VideoRecvFrame()
+                self.metadata_frame = MetadataRecvFrame()
+                self.receiver.set_video_frame(self.video_frame)
+                self.receiver.set_metadata_frame(self.metadata_frame)
+                self.receiver.set_source_tally_program(True)
+            else:
+                self.error_signal.emit("Could not create NDI source")
+                
         except Exception as e:
             self.error_signal.emit(f"NDI init error: {e}")
+    
+    def _create_source_from_ip(self, ip_address: str):
+        """Create NDI source from IP address"""
+        try:
+            # NDI sources can be created from IP:PORT or just IP
+            # Common NDI ports: 5960, 5961, etc.
+            if ':' not in ip_address:
+                # Try common NDI ports
+                for port in [5960, 5961, 5962]:
+                    try:
+                        source_str = f"{ip_address}:{port}"
+                        source = NDICapture.finder.get_source(source_str)
+                        if source:
+                            print(f"Connected to NDI at {source_str}")
+                            return source
+                    except:
+                        continue
+            
+            # Try direct IP
+            source = NDICapture.finder.get_source(ip_address)
+            if source:
+                print(f"Connected to NDI at {ip_address}")
+                return source
+            
+            # If finder doesn't work, try creating a manual source
+            # This is implementation-specific to cyndilib
+            print(f"Attempting manual connection to {ip_address}")
+            return NDICapture.finder.get_source(ip_address)
+            
+        except Exception as e:
+            print(f"Error creating NDI source from IP: {e}")
+            return None
     
     def run(self):
         """Main capture loop"""
