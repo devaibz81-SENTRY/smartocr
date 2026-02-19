@@ -131,8 +131,28 @@ class SmartOCRApp(QMainWindow):
         # Source Selection Tabs (ScoreSight style)
         source_tabs = QTabWidget()
         source_tabs.setStyleSheet("""
-            QTabWidget::pane { border: 1px solid #444; }
-            QTabBar::tab { padding: 10px 20px; font-size: 12px; }
+            QTabWidget::pane { border: 1px solid #444; background: #2b2b2b; }
+            QTabBar::tab { padding: 10px 20px; font-size: 12px; background: #333; color: #ccc; border: 1px solid #444; }
+            QTabBar::tab:selected { background: #444; color: white; border-bottom: 2px solid #4CAF50; }
+            QComboBox { 
+                background-color: #3d3d3d; 
+                color: white; 
+                border: 1px solid #555; 
+                padding: 5px; 
+                border-radius: 3px;
+                selection-background-color: #4CAF50;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #2b2b2b;
+                color: white;
+                selection-background-color: #4CAF50;
+                outline: none;
+                border: 1px solid #444;
+            }
+            QLineEdit { background-color: #3d3d3d; color: white; border: 1px solid #555; padding: 5px; }
+            QPushButton { background-color: #444; color: white; border: 1px solid #555; padding: 8px; }
+            QPushButton:hover { background-color: #555; }
+            QLabel { color: #ddd; }
         """)
         
         # Tab 1: File
@@ -634,8 +654,8 @@ class SmartOCRApp(QMainWindow):
                 self.update_fields_list()
 
         # Update preview in real-time for live sources
-        # For files, we usually wait for the processing thread emit to keep it in sync,
-        # but for NDI/Stream we want max responsive preview.
+        # We only display here if this is a live source (Low latency preview)
+        # For files, we let the processing thread handle the display to keep sync
         if self.current_source_type in ["ndi", "stream", "usb"]:
             self.display_frame(frame)
 
@@ -647,8 +667,13 @@ class SmartOCRApp(QMainWindow):
             self.ndi_output.send_frame(frame)
     
     def on_frame_processed(self, frame, values):
-        """Handle processed frame"""
-        self.display_frame(frame)
+        """Handle processed frame (overlay update)"""
+        # If it's a file, we NEED to display here to stay in sync with the file reader
+        # If it's a live source, we ALREADY displayed the raw frame in on_frame_ready
+        # but we need to update the field list and overlays
+        if self.current_source_type == "file":
+            self.display_frame(frame)
+        
         self.update_fields_list()
         
         if self.http_server:
