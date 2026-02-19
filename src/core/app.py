@@ -483,6 +483,10 @@ class SmartOCRApp(QMainWindow):
             
             self.source_status.setText(f"Source: NDI - {display_name}")
             self.source_status.setStyleSheet("color: #4CAF50;")
+            
+            # Setup fields for current resolution
+            # We don't have resolution yet, so we'll wait for first frame
+            self.video_label.setText("Waiting for NDI video...")
             self.enable_playback_controls()
             
         except Exception as e:
@@ -615,10 +619,26 @@ class SmartOCRApp(QMainWindow):
         self.time_slider.setEnabled(True)
     
     def on_frame_ready(self, frame):
-        """Handle new frame"""
+        """Handle new frame from any source (File, NDI, USB, Stream)"""
         self.current_frame = frame
         self.frame_count_display += 1
         
+        # Calculate video dims if this is the first frame
+        if self.video_width != frame.shape[1] or self.video_height != frame.shape[0]:
+            self.video_height, self.video_width = frame.shape[:2]
+            self.video_label.set_scale(self.video_width, self.video_height)
+            
+            # Auto-create fields if none exist
+            if not self.field_manager.fields:
+                self.field_manager.create_default_fields(self.video_width, self.video_height)
+                self.update_fields_list()
+
+        # Update preview in real-time for live sources
+        # For files, we usually wait for the processing thread emit to keep it in sync,
+        # but for NDI/Stream we want max responsive preview.
+        if self.current_source_type in ["ndi", "stream", "usb"]:
+            self.display_frame(frame)
+
         if self.processing_thread:
             self.processing_thread.set_frame(frame)
         
