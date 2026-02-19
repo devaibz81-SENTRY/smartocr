@@ -429,15 +429,16 @@ class SmartOCRApp(QMainWindow):
     def refresh_ndi_sources(self):
         """Refresh NDI source list"""
         try:
+            # First, check if discovery is still ongoing
             sources = NDICapture.get_sources()
             self.ndi_combo.clear()
             
             if sources:
                 self.ndi_combo.addItems(sources)
-                self.yolo_status.setText("NDI sources found")
+                self.yolo_status.setText(f"Found {len(sources)} NDI sources")
             else:
                 self.ndi_combo.addItem("No NDI sources found")
-                self.yolo_status.setText("No NDI sources")
+                self.yolo_status.setText("No NDI sources (Check network or use NDI Access Manager)")
         except Exception as e:
             self.ndi_combo.clear()
             self.ndi_combo.addItem(f"Error: {e}")
@@ -455,7 +456,6 @@ class SmartOCRApp(QMainWindow):
     
     def connect_ndi(self):
         """Connect to NDI source by name or IP"""
-        # Check if IP address is provided
         ip_address = self.ndi_ip_input.text().strip()
         source_name = self.ndi_combo.currentText()
         
@@ -466,18 +466,17 @@ class SmartOCRApp(QMainWindow):
         
         # Start NDI capture
         try:
-            if ip_address:
-                # Connect by IP
-                self.ndi_capture = NDICapture(ip_address=ip_address)
-                display_name = f"IP: {ip_address}"
-            elif source_name and source_name != "No NDI sources found" and source_name != "Click Refresh to find NDI sources...":
-                # Connect by discovered source name
-                self.ndi_capture = NDICapture(source_name=source_name)
-                display_name = source_name
-            else:
-                QMessageBox.warning(self, "No NDI Source", "Please select an NDI source from the dropdown or enter an IP address.")
-                return
+            # Create instance (it will look for source in Finder)
+            self.ndi_capture = NDICapture(source_name=source_name, ip_address=ip_address)
             
+            if not getattr(self.ndi_capture, 'source', None):
+                QMessageBox.warning(self, "Source Not Found", 
+                    f"Could not find NDI source: {ip_address or source_name}\n\n"
+                    "If using an IP across subnets, ensure it's added in 'NDI Access Manager'.")
+                self.ndi_capture = None
+                return
+
+            display_name = self.ndi_capture.source.name
             self.ndi_capture.frame_ready.connect(self.on_frame_ready)
             self.ndi_capture.error_signal.connect(self.on_source_error)
             self.ndi_capture.start()
@@ -487,7 +486,7 @@ class SmartOCRApp(QMainWindow):
             self.enable_playback_controls()
             
         except Exception as e:
-            QMessageBox.critical(self, "NDI Error", f"Failed to connect: {str(e)}\n\nMake sure cyndilib is installed:\npip install cyndilib")
+            QMessageBox.critical(self, "NDI Error", f"Failed to connect: {str(e)}")
     
     def connect_stream(self):
         """Connect to network stream"""
