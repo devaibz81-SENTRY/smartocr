@@ -3,6 +3,7 @@ Stream Capture - SRT, RTSP, RTMP video input
 """
 import cv2
 import numpy as np
+import time
 from PySide6.QtCore import QThread, Signal
 
 class StreamCapture(QThread):
