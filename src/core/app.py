@@ -26,6 +26,7 @@ from src.yolo.field_detector import YOLOFieldDetector
 from src.http.server import HTTPServerThread
 from src.input.ndi_capture import NDICapture
 from src.input.stream_capture import StreamCapture
+from src.input.usb_camera import USBCameraCapture
 
 class ProcessingThread(QThread):
     """Separate thread for video processing"""
@@ -88,6 +89,7 @@ class SmartOCRApp(QMainWindow):
         self.video_reader = None
         self.ndi_capture = None
         self.stream_capture = None
+        self.usb_capture = None
         self.processing_thread = None
         self.field_manager = FieldManager()
         self.field_tracker = FieldTracker()
@@ -192,6 +194,36 @@ class SmartOCRApp(QMainWindow):
         stream_layout.addWidget(self.stream_connect_btn)
         stream_layout.addStretch()
         source_tabs.addTab(stream_tab, "🌐 Stream")
+        
+        # Tab 4: USB Camera
+        usb_tab = QWidget()
+        usb_layout = QVBoxLayout(usb_tab)
+        
+        usb_top = QHBoxLayout()
+        self.usb_refresh_btn = QPushButton("🔄 Refresh")
+        self.usb_refresh_btn.clicked.connect(self.refresh_usb_cameras)
+        usb_top.addWidget(self.usb_refresh_btn)
+        usb_layout.addLayout(usb_top)
+        
+        self.usb_combo = QComboBox()
+        self.usb_combo.setStyleSheet("font-size: 12px; padding: 5px;")
+        self.usb_combo.addItem("Click Refresh to find USB cameras...")
+        usb_layout.addWidget(QLabel("USB Cameras:"))
+        usb_layout.addWidget(self.usb_combo)
+        
+        # Resolution selector
+        usb_layout.addWidget(QLabel("Resolution:"))
+        self.usb_resolution = QComboBox()
+        self.usb_resolution.addItems(["1920x1080", "1280x720", "640x480", "320x240"])
+        self.usb_resolution.setCurrentIndex(1)  # Default to 720p
+        usb_layout.addWidget(self.usb_resolution)
+        
+        self.usb_connect_btn = QPushButton("📷 Connect Camera")
+        self.usb_connect_btn.setStyleSheet("font-size: 14px; padding: 10px; background-color: #FF9800;")
+        self.usb_connect_btn.clicked.connect(self.connect_usb_camera)
+        usb_layout.addWidget(self.usb_connect_btn)
+        usb_layout.addStretch()
+        source_tabs.addTab(usb_tab, "📷 USB")
         
         left_layout.addWidget(source_tabs)
         
@@ -456,6 +488,53 @@ class SmartOCRApp(QMainWindow):
             except Exception as e:
                 QMessageBox.critical(self, "Stream Error", str(e))
     
+    def refresh_usb_cameras(self):
+        """Refresh USB camera list"""
+        try:
+            cameras = USBCameraCapture.list_cameras()
+            self.usb_combo.clear()
+            
+            if cameras:
+                for cam in cameras:
+                    self.usb_combo.addItem(cam['name'], cam['index'])
+                self.yolo_status.setText(f"Found {len(cameras)} USB camera(s)")
+            else:
+                self.usb_combo.addItem("No USB cameras found")
+                self.yolo_status.setText("No USB cameras detected")
+        except Exception as e:
+            self.usb_combo.clear()
+            self.usb_combo.addItem(f"Error: {e}")
+    
+    def connect_usb_camera(self):
+        """Connect to USB camera"""
+        camera_idx = self.usb_combo.currentData()
+        if camera_idx is None:
+            QMessageBox.warning(self, "No Camera", "Please select a camera first")
+            return
+        
+        # Parse resolution
+        res_text = self.usb_resolution.currentText()
+        width, height = map(int, res_text.split('x'))
+        
+        self.current_source_type = "usb"
+        
+        # Stop existing
+        self.stop_current_source()
+        
+        # Start USB capture
+        try:
+            self.usb_capture = USBCameraCapture(camera_idx, width, height)
+            self.usb_capture.frame_ready.connect(self.on_frame_ready)
+            self.usb_capture.error_signal.connect(self.on_source_error)
+            self.usb_capture.start()
+            
+            self.source_status.setText(f"Source: USB Camera {camera_idx} ({width}x{height})")
+            self.source_status.setStyleSheet("color: #FF9800;")
+            self.enable_playback_controls()
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Camera Error", str(e))
+    
     def setup_video_source(self, path):
         """Setup video file source"""
         self.stop_current_source()
@@ -495,6 +574,9 @@ class SmartOCRApp(QMainWindow):
         if self.stream_capture:
             self.stream_capture.stop()
             self.stream_capture = None
+        if self.usb_capture:
+            self.usb_capture.stop()
+            self.usb_capture = None
         if self.processing_thread:
             self.processing_thread.stop()
             self.processing_thread = None
