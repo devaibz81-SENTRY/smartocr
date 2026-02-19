@@ -6,6 +6,7 @@ import numpy as np
 import pytesseract
 from typing import Tuple, Optional
 import os
+from src.processing.image_preprocessor import ImagePreprocessor
 
 # Set Tesseract path for Windows
 if os.name == 'nt':  # Windows
@@ -25,7 +26,7 @@ if os.name == 'nt':  # Windows
     
     if not tesseract_found:
         print("WARNING: Tesseract not found in standard locations.")
-        print("Please ensure Tesseract is installed at C:\\Program Files\\Tesseract-OCR\\")
+        print("Please ensure Tesseract is installed at C:\Program Files\Tesseract-OCR\\")
 
 class OCREngine:
     """
@@ -35,6 +36,7 @@ class OCREngine:
     def __init__(self):
         # Configure tesseract for digits and scoreboard characters
         self.custom_config = r'--oem 3 --psm 7 -c tessedit_char_whitelist=0123456789:QOTPS1234 '
+        self.preprocessor = ImagePreprocessor()
     
     def recognize(self, image: np.ndarray) -> Tuple[str, float]:
         """
@@ -77,33 +79,9 @@ class OCREngine:
     def _preprocess(self, image: np.ndarray) -> np.ndarray:
         """
         Preprocess image for better OCR results
+        Uses advanced preprocessing from ScoreSight
         """
-        # Convert to grayscale if needed
-        if len(image.shape) == 3:
-            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        else:
-            gray = image
-        
-        # Resize if too small (helps OCR)
-        h, w = gray.shape
-        if h < 30 or w < 30:
-            scale = max(60 / h, 60 / w)
-            new_w = int(w * scale)
-            new_h = int(h * scale)
-            gray = cv2.resize(gray, (new_w, new_h), interpolation=cv2.INTER_CUBIC)
-        
-        # Apply adaptive thresholding
-        binary = cv2.adaptiveThreshold(
-            gray, 255,
-            cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-            cv2.THRESH_BINARY,
-            11, 2
-        )
-        
-        # Denoise
-        denoised = cv2.fastNlMeansDenoising(binary, None, 10, 7, 21)
-        
-        return denoised
+        return self.preprocessor.preprocess(image, method='adaptive')
     
     def recognize_field(self, image: np.ndarray, field_type: str) -> Tuple[str, float]:
         """
